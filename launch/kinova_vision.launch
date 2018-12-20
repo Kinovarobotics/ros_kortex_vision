@@ -1,0 +1,134 @@
+<launch>
+
+  <!-- Node general configuration -->
+  <arg name="device" default="192.168.1.10"
+        doc="Device IPv4 address" />
+
+  <arg name="respawn" default="false"
+       doc="Disable bond topics by default" />
+
+  <arg name="num_worker_threads" default="4"
+       doc="Worker threads for the nodelet manager" />
+
+  <arg name="camera" default="camera"
+       doc="'camera' should uniquely identify the device. All topics are pushed down
+            into the 'camera' namespace." />
+
+  <arg name="color_frame_id" default="camera_color_frame"
+       doc="Color camera frame identifier." />
+
+  <arg name="depth_frame_id" default="camera_depth_frame"
+       doc="Depth camera frame identifier." />
+
+  <arg name="color_camera_info_url" default=""
+       doc="URL of custom calibration file for color camera.
+            See camera_info_manager docs for calibration URL details." />
+
+  <arg name="depth_camera_info_url" default=""
+       doc="URL of custom calibration file for depth camera.
+            See camera_info_manager docs for calibration URL details." />
+
+  <arg name="depth_registration" default="false"
+       doc="Hardware depth registration" />
+
+  <!-- Arguments for remapping all device namespaces -->
+  <arg name="rgb"              default="color" />
+  <arg name="depth"            default="depth" />
+
+  <!-- Depth stream RTSP/RTP elements configuration -->
+  <arg name="depth_rtsp_media_url" default="rtsp://$(arg device)/depth"
+       doc="RTSP media URL for depth stream" />
+
+  <arg name="depth_rtsp_element_config" default="rtspsrc location=$(arg depth_rtsp_media_url) latency=30"
+       doc="RTSP element configuration for depth stream" />
+
+  <arg name="depth_rtp_depay_element_config" default="rtpgstdepay"
+       doc="RTP element configuration for depth stream" />
+
+  <!-- Color stream RTSP/RTP elements configuration -->
+  <arg name="color_rtsp_media_url" default="rtsp://$(arg device)/color"
+       doc="RTSP media URL for color stream" />
+
+  <arg name="color_rtsp_element_config" default="rtspsrc location=$(arg color_rtsp_media_url) latency=30"
+       doc="RTSP element configuration for color stream" />
+
+  <arg name="color_rtp_depay_element_config" default="rtph264depay"
+       doc="RTP element configuration for color stream" />
+
+  <!-- Push down all topics/nodelets into "camera" namespace -->
+  <group ns="camera">
+
+    <!-- Start nodelet manager -->
+    <arg name="manager" value="$(arg camera)_nodelet_manager" />
+    <arg name="debug" default="false" /> <!-- Run manager in GDB? -->
+
+    <include file="$(find rgbd_launch)/launch/includes/manager.launch.xml">
+      <arg name="name" value="$(arg manager)" />
+      <arg name="debug" value="$(arg debug)" />
+      <arg name="num_worker_threads"  value="$(arg num_worker_threads)" />
+    </include>
+
+    <!-- Depth node configuration -->
+    <node ns="depth" name="kinova_vision_depth" pkg="kinova_vision" type="kinova_vision" output="screen">
+      <param name="camera_type"             value="depth" />
+      <param name="camera_name"             value="depth" />
+      <param name="camera_info_url_default" value="package://kinova_vision/launch/calibration/default_depth_calib_%ux%u.ini"/>
+      <param name="camera_info_url_user"    value="$(arg depth_camera_info_url)"/>
+      <param name="stream_config"           value="$(arg depth_rtsp_element_config) ! $(arg depth_rtp_depay_element_config)"/>
+      <param name="frame_id"                value="$(arg depth_frame_id)"/>
+    </node>
+
+    <!-- Color node configuration -->
+    <node ns="color" name="kinova_vision_color" pkg="kinova_vision" type="kinova_vision" output="screen">
+      <param name="camera_type"             value="color" />
+      <param name="camera_name"             value="color" />
+      <param name="camera_info_url_default" value="package://kinova_vision/launch/calibration/default_color_calib_%ux%u.ini" />
+      <param name="camera_info_url_user"    value="$(arg color_camera_info_url)" />
+      <param name="stream_config"           value="$(arg color_rtsp_element_config) ! $(arg color_rtp_depay_element_config) ! avdec_h264 ! videoconvert"/>
+      <param name="frame_id"                value="$(arg color_frame_id)"/>
+    </node>
+
+    <!-- Static transformations -->
+    <node pkg="tf2_ros"
+      type="static_transform_publisher"
+      name="camera_depth_tf_publisher"
+      args="-0.0195 -0.005 0 0 0 0 camera_link $(arg depth_frame_id)" />
+
+    <node pkg="tf2_ros"
+      type="static_transform_publisher"
+      name="camera_color_tf_publisher"
+      args="0 0 0 0 0 0 camera_link $(arg color_frame_id)" />
+
+    <!-- Processing modules configuration-->
+    <arg name="rgb_processing"                  default="true"  />
+    <arg name="debayer_processing"              default="false" />
+    <arg name="ir_processing"                   default="false"/>
+    <arg name="depth_processing"                default="true" />
+    <arg name="depth_registered_processing"     default="false" />
+    <arg name="disparity_processing"            default="false" />
+    <arg name="disparity_registered_processing" default="false" />
+    <arg name="hw_registered_processing"        default="true" if="$(arg depth_registration)" />
+    <arg name="sw_registered_processing"        default="false" if="$(arg depth_registration)" />
+    <arg name="hw_registered_processing"        default="false" unless="$(arg depth_registration)" />
+    <arg name="sw_registered_processing"        default="true" unless="$(arg depth_registration)" />
+
+    <!-- Load standard constellation of processing nodelets -->
+    <include file="$(find rgbd_launch)/launch/includes/processing.launch.xml">
+      <arg name="manager"                         value="$(arg manager)" />
+      <arg name="rgb"                             value="$(arg rgb)" />
+      <arg name="depth"                           value="$(arg depth)" />
+      <arg name="respawn"                         value="$(arg respawn)" />
+      <arg name="rgb_processing"                  value="$(arg rgb_processing)" />
+      <arg name="debayer_processing"              value="$(arg debayer_processing)" />
+      <arg name="ir_processing"                   value="$(arg ir_processing)" />
+      <arg name="depth_processing"                value="$(arg depth_processing)" />
+      <arg name="depth_registered_processing"     value="$(arg depth_registered_processing)" />
+      <arg name="disparity_processing"            value="$(arg disparity_processing)" />
+      <arg name="disparity_registered_processing" value="$(arg disparity_registered_processing)" />
+      <arg name="hw_registered_processing"        value="$(arg hw_registered_processing)" />
+      <arg name="sw_registered_processing"        value="$(arg sw_registered_processing)" />
+    </include>
+
+  </group>
+
+</launch>
