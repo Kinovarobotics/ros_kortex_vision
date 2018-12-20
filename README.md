@@ -174,19 +174,19 @@ The values for `FX`, `FY`, `PPX`, `PPY` can be obtained via the Vision module AP
 
 * **color_only.rviz:** View the images coming from the color camera only. The package needs to be launched with *kinova_vision_color_only.launch*, *kinova_vision.launch* or *kinova_vision_rgbd.launch*.
 
-<p align="left"> <img alt="color_only.rviz.png" src="doc/color_only.rviz.png" width=60% title="Color only"/> </p>
+<p align="left"> <img alt="color_only.rviz.png" src="doc/color_only.rviz.png" title="Color only"/> </p>
 
 * **depth_only.rviz:** View the images and the depth cloud coming from the depth camera only. The package needs to be launched with *kinova_vision_depth_only.launch*, *kinova_vision.launch* or *kinova_vision_rgbd.launch*.
 
-<p align="left"> <img alt="depth_only.rviz.png" src="doc/depth_only.rviz.png" width=60% title="Depth only"/> </p>
+<p align="left"> <img alt="depth_only.rviz.png" src="doc/depth_only.rviz.png" title="Depth only"/> </p>
 
 * **depth_and_color.rviz:** View the images coming from the color camera as well as the images and the depth cloud coming from the depth camera. The package needs to be launched with *kinova_vision.launch* or *kinova_vision_rgbd.launch*.
 
-<p align="left"> <img alt="depth_and_color.rviz.png" src="doc/depth_and_color.rviz.png" width=60% title="Depth and color"/> </p>
+<p align="left"> <img alt="depth_and_color.rviz.png" src="doc/depth_and_color.rviz.png" title="Depth and color"/> </p>
 
 * **depth_and_color_rgbd.rviz:** View the images coming from the color camera as well as the images, the RGBD point cloud and the depth cloud coming from the depth camera. The package needs to be launched with *kinova_vision_rgbd.launch*.
 
-<p align="left"> <img alt="depth_and_color_rgbd.rviz.png" src="doc/depth_and_color_rgbd.rviz.png" width=60% title="Depth and color with rgbd"/> </p>
+<p align="left"> <img alt="depth_and_color_rgbd.rviz.png" src="doc/depth_and_color_rgbd.rviz.png" title="Depth and color with rgbd"/> </p>
 
 <a name="nodes"></a>
 ## Nodes
