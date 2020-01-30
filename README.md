@@ -17,9 +17,11 @@ The following instructions are for ROS Kinetic Kame, running under **Ubuntu 16.0
 * libgstreamer1.0-dev 
 * libgstreamer-plugins-base1.0-dev 
 * libgstreamer-plugins-good1.0-dev
+* gstreamer1.0-plugins-good
+* gstreamer1.0-plugins-base
 
 ```sh
-sudo apt install gstreamer1.0-tools gstreamer1.0-libav libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev libgstreamer-plugins-good1.0-dev
+sudo apt install gstreamer1.0-tools gstreamer1.0-libav libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev libgstreamer-plugins-good1.0-dev gstreamer1.0-plugins-good gstreamer1.0-plugins-base
 ```
 
 ##### ROS package
