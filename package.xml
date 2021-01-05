@@ -25,5 +25,7 @@
   <run_depend>sensor_msgs</run_depend>
   <run_depend>camera_calibration_parsers</run_depend>
   <run_depend>camera_info_manager</run_depend>
-</package>
+  <run_depend>rgbd_launch</run_depend>
+  <run_depend>tf2_ros</run_depend>
 
+</package>
