@@ -14,6 +14,9 @@
        doc="'camera' should uniquely identify the device. All topics are pushed down
             into the 'camera' namespace." />
 
+  <arg name="camera_link_frame_id" default="camera_link"
+       doc="Camera link frame identifier." />
+
   <arg name="color_frame_id" default="camera_color_frame"
        doc="Color camera frame identifier." />
 
@@ -67,7 +70,7 @@
     <node pkg="tf2_ros"
       type="static_transform_publisher"
       name="camera_depth_tf_publisher"
-      args="-0.0195 -0.005 0 0 0 0 camera_link $(arg depth_frame_id)" />
+      args="-0.0195 -0.005 0 0 0 0 $(arg camera_link_frame_id) $(arg depth_frame_id)" />
 
     <!-- Processing modules configuration-->
     <arg name="rgb_processing"                  default="false"  />

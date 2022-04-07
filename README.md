@@ -96,6 +96,7 @@ Refer to the [Nodes](#nodes) section to see the published topics using the messa
 
     - **`device`** device IP address (default: `192.168.1.10`)
     - **`num_worker_threads`** number of worker threads for the nodelet manager (default: `4`)
+    - **`camera_link_frame_id`** camera link frame identifier (default: `camera_link`)
     - **`color_frame_id`** color camera frame identifier (default: `camera_color_frame`)
     - **`depth_frame_id`** depth camera frame identifier (default: `camera_depth_frame`)
     - **`color_camera_info_url`** URL of color camera custom calibration file (see [camera_info_manager] documentation for calibration URL details)
@@ -107,6 +108,7 @@ Refer to the [Nodes](#nodes) section to see the published topics using the messa
 
     - **`device`** device IP address (default: `192.168.1.10`)
     - **`num_worker_threads`** number of worker threads for the nodelet manager (default: `4`)
+    - **`camera_link_frame_id`** camera link frame identifier (default: `camera_link`)
     - **`color_frame_id`** color camera frame identifier (default: `camera_color_frame`)
     - **`depth_frame_id`** depth camera frame identifier (default: `camera_depth_frame`)
     - **`color_camera_info_url`** URL of color camera custom calibration file (see [camera_info_manager] documentation for calibration URL details)
@@ -118,6 +120,7 @@ Refer to the [Nodes](#nodes) section to see the published topics using the messa
 
     - **`device`** device IP address (default: `192.168.1.10`)
     - **`num_worker_threads`** number of worker threads for the nodelet manager (default: `4`)
+    - **`camera_link_frame_id`** camera link frame identifier (default: `camera_link`)
     - **`color_frame_id`** color camera frame identifier (default: `camera_color_frame`)
     - **`color_camera_info_url`** URL of color camera custom calibration file (see [camera_info_manager] documentation for calibration URL details)
 
@@ -127,6 +130,7 @@ Refer to the [Nodes](#nodes) section to see the published topics using the messa
 
     - **`device`** device IP address (default: `192.168.1.10`)
     - **`num_worker_threads`** number of worker threads for the nodelet manager (default: `4`)
+    - **`camera_link_frame_id`** camera link frame identifier (default: `camera_link`)
     - **`depth_frame_id`** depth camera frame identifier (default: `camera_depth_frame`)
     - **`depth_camera_info_url`** URL of depth camera custom calibration file (see [camera_info_manager] documentation for calibration URL details)
 
