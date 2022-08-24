@@ -1,0 +1,10 @@
+OUTPUT VALUES
+x y z: 0.0088 -0.005312 0.012
+
+PARAMETERS
+
+COLOR
+thresh: 200
+
+DEPTH
+thresh: 75

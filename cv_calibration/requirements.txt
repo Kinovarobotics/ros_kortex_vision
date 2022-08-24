@@ -1,0 +1,9 @@
+mss>=6.1.0
+numpy>=1.17.4
+opencv_python>=4.6.0.66
+python-xlib>=0.31
+rospy>=1.15.14
+scipy>=1.8.1
+tf>=1.13.2
+tf2-ros>=0.7.5
+tf2-py>=0.7.5

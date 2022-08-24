@@ -1,0 +1,5 @@
+<launch>
+    <arg name="start_delay_seconds" default="0"/>
+    <node name="rviz_calibration" pkg="cv_calibration" type="rviz_calibration.py" output="screen" launch-prefix="bash -c 'sleep $(arg start_delay_seconds); $0 $@' ">
+    </node>
+</launch>

@@ -1,0 +1,8 @@
+<launch>
+    <group ns="camera">
+        <node pkg="tf2_ros"
+            type="static_transform_publisher"
+            name="camera_color_tf_publisher"
+            args="0 0 0 0 0 0 camera_link camera_color_frame" />
+    </group>
+</launch>
