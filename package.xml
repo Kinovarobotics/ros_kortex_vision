@@ -2,7 +2,7 @@
   <name>kinova_vision</name>
   <version>1.0.0</version>
   <description>Package allowing access to the Kinova vision module color and depth stream.</description>
-  <maintainer email="ros@kinovarobotics.com">Kinova</maintainer>
+  <maintainer email="support@kinova.ca">Kinova</maintainer>
   <url type="repository">https://github.com/Kinovarobotics</url>
   <license>BSD</license>
 
