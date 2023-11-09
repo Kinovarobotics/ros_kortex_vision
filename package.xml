@@ -1,4 +1,6 @@
-<package>
+<?xml version="1.0"?>
+<?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
+<package format="3">
   <name>kinova_vision</name>
   <version>1.0.0</version>
   <description>Package allowing access to the Kinova vision module color and depth stream.</description>
@@ -6,26 +8,23 @@
   <url type="repository">https://github.com/Kinovarobotics</url>
   <license>BSD</license>
 
-  <buildtool_depend>catkin</buildtool_depend>
+  <buildtool_depend>ament_cmake</buildtool_depend>
 
-  <build_depend>libgstreamer1.0-dev</build_depend>
-  <build_depend>libgstreamer-plugins-base1.0-dev</build_depend>
+  <depend>libgstreamer1.0-dev</depend>
+  <depend>libgstreamer-plugins-base1.0-dev</depend>
 
-  <build_depend>nodelet</build_depend>
-  <build_depend>roscpp</build_depend>
-  <build_depend>image_transport</build_depend>
-  <build_depend>sensor_msgs</build_depend>
-  <build_depend>camera_calibration_parsers</build_depend>
-  <build_depend>camera_info_manager</build_depend>
+  <depend>camera_calibration_parsers</depend>
+  <depend>camera_info_manager</depend>
+  <depend>cv_bridge</depend>
+  <depend>image_transport</depend>
+  <depend>rclcpp</depend>
+  <depend>rclcpp_components</depend>
+  <depend>sensor_msgs</depend>
+  <depend>tf2</depend>
+  <depend>tf2_ros</depend>
 
-  <run_depend>nodelet</run_depend>
-  <run_depend>cv_bridge</run_depend>
-  <run_depend>roscpp</run_depend>
-  <run_depend>image_transport</run_depend>
-  <run_depend>sensor_msgs</run_depend>
-  <run_depend>camera_calibration_parsers</run_depend>
-  <run_depend>camera_info_manager</run_depend>
-  <run_depend>rgbd_launch</run_depend>
-  <run_depend>tf2_ros</run_depend>
+  <export>
+    <build_type>ament_cmake</build_type>
+  </export>
 
 </package>

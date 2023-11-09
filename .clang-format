@@ -51,7 +51,7 @@ SpaceAfterCStyleCast: false
 BreakBeforeBraces: Custom
 
 # Control of individual brace wrapping cases
-BraceWrapping: {
+BraceWrapping:
     AfterClass: 'true'
     AfterControlStatement: 'true'
     AfterEnum : 'true'
@@ -62,5 +62,4 @@ BraceWrapping: {
     BeforeCatch : 'true'
     BeforeElse : 'true'
     IndentBraces : 'false'
-}
 ...

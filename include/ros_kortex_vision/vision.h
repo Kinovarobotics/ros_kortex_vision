@@ -1,20 +1,18 @@
-#ifndef KINOVA_VISION_H
-#define KINOVA_VISION_H
+#pragma once
 
-extern "C" {
+#include <atomic>
 #include <gst/gst.h>
 #include <gst/app/gstappsink.h>
-}
 
-#include <ros/ros.h>
+#include <rclcpp/rclcpp.hpp>
 
-#include <image_transport/image_transport.h>
-#include <camera_info_manager/camera_info_manager.h>
+#include <image_transport/image_transport.hpp>
+#include <camera_info_manager/camera_info_manager.hpp>
 
-#include <sensor_msgs/Image.h>
-#include <sensor_msgs/image_encodings.h>
-#include <sensor_msgs/CameraInfo.h>
-#include <sensor_msgs/SetCameraInfo.h>
+#include <sensor_msgs/image_encodings.hpp>
+#include <sensor_msgs/msg/image.hpp>
+#include <sensor_msgs/msg/camera_info.hpp>
+#include <sensor_msgs/srv/set_camera_info.hpp>
 
 namespace CameraTypes
 {
@@ -26,12 +24,14 @@ enum CameraType
 };
 }
 
+namespace ros_kortex_vision
+{
 class Vision
 {
 public:
-  Vision(ros::NodeHandle nh_camera, ros::NodeHandle nh_private);
+  Vision(const rclcpp::NodeOptions& options);
   ~Vision();
-
+  rclcpp::node_interfaces::NodeBaseInterface::SharedPtr getNodeBaseInterface();
   void run();
   void quit();
 
@@ -46,11 +46,14 @@ private:
 
 private:
   // ROS elements
-  ros::NodeHandle nh_;
-  ros::NodeHandle nh_private_;
-  camera_info_manager::CameraInfoManager camera_info_manager_;
-  image_transport::CameraPublisher camera_publisher_;
-  image_transport::ImageTransport image_transport_;
+  std::shared_ptr<rclcpp::Node> node_;
+  std::shared_ptr<camera_info_manager::CameraInfoManager> camera_info_manager_;
+  std::shared_ptr<image_transport::CameraPublisher> camera_publisher_;
+
+  // Node status booleans
+  std::atomic<bool> is_started_;
+  std::atomic<bool> stop_requested_;
+  std::atomic<bool> quit_requested_;
 
   // Gstreamer elements
   GstElement* gst_pipeline_;
@@ -63,10 +66,6 @@ private:
   std::string frame_id_;
   std::string image_encoding_;
   std::string base_frame_id_;
-
-  bool is_started_;
-  bool stop_requested_;
-  bool quit_requested_;
   int retry_count_;
   int camera_type_;
   double time_offset_;
@@ -76,5 +75,4 @@ private:
   bool use_gst_timestamps_;
   bool is_first_initialize_;
 };
-
-#endif
+}  // namespace ros_kortex_vision

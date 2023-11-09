@@ -1,33 +1,32 @@
 
-#include "vision.h"
+#include <ros_kortex_vision/vision.h>
 
-#include <ros/ros.h>
+#include <rclcpp/rclcpp.hpp>
 #include <signal.h>
 
-Vision* g_vision = NULL;
+std::shared_ptr<ros_kortex_vision::Vision> node;
 
 void sigintHandler(int signal)
 {
-  if (g_vision)
+  if (node)
   {
-    g_vision->quit();
+    node->quit();
   }
 
-  ros::shutdown();
+  rclcpp::shutdown();
+  exit(signal);
 }
 
 int main(int argc, char** argv)
 {
-  ros::init(argc, argv, "kinova_vision", ros::init_options::NoSigintHandler);
-  ros::NodeHandle nh, nh_private("~");
-
-  // Override the default ros sigint handler.
+  // Override the default sigint handler.
   signal(SIGINT, sigintHandler);
 
-  g_vision = new Vision(nh, nh_private);
-  g_vision->run();
+  rclcpp::init(argc, argv);
 
-  delete g_vision;
+  auto opt = rclcpp::NodeOptions().use_intra_process_comms(true);
+  node = std::make_shared<ros_kortex_vision::Vision>(opt);
+  node->run();
 
   return 0;
 }

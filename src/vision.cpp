@@ -1,21 +1,43 @@
-#include "vision.h"
-#include "constants.h"
+#include <ros_kortex_vision/vision.h>
 
 #include <stdio.h>
 
-const int CAM_INFO_DEFAULT_URL_MAX_SIZE = 128;
+namespace
+{
+constexpr auto NODE_NAME = "kinova_vision";
+constexpr auto CAM_INFO_DEFAULT_URL_MAX_SIZE = 128;
 
-Vision::Vision(ros::NodeHandle nh_camera, ros::NodeHandle nh_private)
-  : nh_(nh_camera)
-  , nh_private_(nh_private)
-  , camera_info_manager_(nh_camera)
-  , image_transport_(nh_camera)
-  , gst_pipeline_(NULL)
-  , gst_sink_(NULL)
-  , base_frame_id_(DEFAULT_BASE_FRAME_ID)
+constexpr auto DEFAULT_BASE_FRAME_ID = "camera_link";
+constexpr auto DEFAULT_DEPTH_FRAME_ID = "camera_depth_frame";
+constexpr auto DEFAULT_COLOR_FRAME_ID = "camera_color_frame";
+
+const int RETRY_INTERVAL = 3;
+const unsigned int STATE_CHANGE_ASYNC_TIMEOUT = 15;
+const unsigned int APP_SINK_BUFFER_COUNT = 5;
+
+// ROS Parameter names
+// TODO: Use generate_param_library and clean up configuration
+const std::string STREAM_CONFIG_PARAM = "stream_config";
+const std::string CAMERA_TYPE_PARAM = "camera_type";
+const std::string CAMERA_NAME_PARAM = "camera_name";
+const std::string FRAME_ID_PARAM = "frame_id";
+const std::string CAMERA_INFO_URL_USER_PARAM = "camera_info_url_user";
+const std::string CAMERA_INFO_URL_DEFAULT_PARAM = "camera_info_url_default";
+}  // namespace
+
+namespace ros_kortex_vision
+{
+Vision::Vision(const rclcpp::NodeOptions& options)
+  : node_{ std::make_shared<rclcpp::Node>(NODE_NAME, options) }
+  , camera_info_manager_{ std::make_shared<camera_info_manager::CameraInfoManager>(node_.get()) }
+  , camera_publisher_{ std::make_shared<image_transport::CameraPublisher>(
+        image_transport::create_camera_publisher(node_.get(), "image_raw")) }
   , is_started_(false)
   , stop_requested_(false)
   , quit_requested_(false)
+  , gst_pipeline_(NULL)
+  , gst_sink_(NULL)
+  , base_frame_id_(DEFAULT_BASE_FRAME_ID)
   , retry_count_(0)
   , camera_type_(CameraTypes::Unknown)
   , time_offset_(0)
@@ -29,29 +51,36 @@ Vision::Vision(ros::NodeHandle nh_camera, ros::NodeHandle nh_private)
 
 Vision::~Vision()
 {
+  quit();
+}
+
+rclcpp::node_interfaces::NodeBaseInterface::SharedPtr Vision::getNodeBaseInterface()
+{
+  return node_->get_node_base_interface();
 }
 
 bool Vision::configure()
 {
-  std::string streamConfig_rosparam = "";
-  bool bStreamConfigDefined = false;
-  char* streamConfig_env = NULL;
-
-  bStreamConfigDefined = nh_private_.getParam("stream_config", streamConfig_rosparam);
-
-  if (!bStreamConfigDefined)
+  node_->declare_parameter<std::string>(STREAM_CONFIG_PARAM);
+  if (!node_->get_parameter<std::string>(STREAM_CONFIG_PARAM, camera_config_))
   {
-    ROS_FATAL("'stream_config' rosparam is not set. This is needed to set up a gstreamer pipeline.");
+    RCLCPP_FATAL(node_->get_logger(), "'%s' rosparam is not set. This is needed to set up a gstreamer pipeline.",
+                 STREAM_CONFIG_PARAM.c_str());
     return false;
   }
   else
   {
-    camera_config_ = streamConfig_rosparam;
-    ROS_INFO_STREAM("Using gstreamer config from rosparam: \"" << camera_config_ << "\"");
+    RCLCPP_INFO_STREAM(node_->get_logger(), "Using gstreamer config from rosparam: \"" << camera_config_ << "\"");
   }
 
   std::string camera_type;
-  nh_private_.getParam("camera_type", camera_type);
+  node_->declare_parameter<std::string>(CAMERA_TYPE_PARAM);
+  if (!node_->get_parameter<std::string>(CAMERA_TYPE_PARAM, camera_type))
+  {
+    RCLCPP_FATAL(node_->get_logger(), "'%s' rosparam is not set. This param is required for this node to run! Exiting.",
+                 CAMERA_TYPE_PARAM.c_str());
+    return false;
+  }
 
   // Set encoding related to camera type;
   if (camera_type == "color")
@@ -66,29 +95,33 @@ bool Vision::configure()
   }
   else
   {
-    ROS_FATAL("camera_type param not set! This param is required for this node to run! Exiting..");
+    RCLCPP_FATAL(node_->get_logger(), "%s: '%s' is invalid! Must be 'color' or 'depth'", CAMERA_TYPE_PARAM.c_str(),
+                 camera_type.c_str());
     return false;
   }
 
   pixel_size_ = sensor_msgs::image_encodings::numChannels(image_encoding_) *
                 (sensor_msgs::image_encodings::bitDepth(image_encoding_) / 8);
 
-  if (nh_private_.getParam("camera_name", camera_name_))
+  node_->declare_parameter<std::string>(CAMERA_NAME_PARAM);
+  if (node_->get_parameter<std::string>(CAMERA_NAME_PARAM, camera_name_))
   {
-    camera_info_manager_.setCameraName(camera_name_);
+    camera_info_manager_->setCameraName(camera_name_);
   }
   else
   {
     camera_name_ = "Camera";
-    ROS_WARN_STREAM("camera_name param not found. Using default value: " << camera_name_);
-    camera_info_manager_.setCameraName(camera_name_);
+    RCLCPP_WARN(node_->get_logger(), "%s param not found. Using default value: %s", CAMERA_NAME_PARAM.c_str(),
+                camera_name_.c_str());
+    camera_info_manager_->setCameraName(camera_name_);
   }
 
-  if (!nh_private_.getParam("frame_id", frame_id_))
+  node_->declare_parameter<std::string>(FRAME_ID_PARAM);
+  if (!node_->get_parameter<std::string>(FRAME_ID_PARAM, frame_id_))
   {
     frame_id_ = "/camera_frame";
-    ROS_WARN_STREAM("No camera frame_id set, using frame \"" << frame_id_ << "\".");
-    nh_private_.setParam("frame_id", frame_id_);
+    RCLCPP_WARN(node_->get_logger(), "No camera frame_id set, using frame '%s'", frame_id_.c_str());
+    node_->set_parameter(rclcpp::Parameter(FRAME_ID_PARAM, frame_id_));
   }
 
   return true;
@@ -106,7 +139,7 @@ bool Vision::initialize()
   gst_pipeline_ = gst_parse_launch(camera_config_.c_str(), &error);
   if (gst_pipeline_ == NULL)
   {
-    ROS_FATAL_STREAM(error->message);
+    RCLCPP_FATAL(node_->get_logger(), error->message);
     return false;
   }
 
@@ -141,7 +174,7 @@ bool Vision::initialize()
 
     if (!gst_bin_add(GST_BIN(gst_pipeline_), gst_sink_))
     {
-      ROS_FATAL("[%s]: gst_bin_add() failed", camera_name_.c_str());
+      RCLCPP_FATAL(node_->get_logger(), "[%s]: gst_bin_add() failed", camera_name_.c_str());
       gst_object_unref(outelement);
       gst_object_unref(gst_pipeline_);
       gst_pipeline_ = NULL;
@@ -150,8 +183,8 @@ bool Vision::initialize()
 
     if (!gst_element_link(outelement, gst_sink_))
     {
-      ROS_FATAL("[%s]: gstreamer: cannot link outelement(\"%s\") -> sink\n", camera_name_.c_str(),
-                gst_element_get_name(outelement));
+      RCLCPP_FATAL(node_->get_logger(), "[%s]: gstreamer: cannot link outelement(\"%s\") -> sink\n",
+                   camera_name_.c_str(), gst_element_get_name(outelement));
       gst_object_unref(outelement);
       gst_object_unref(gst_pipeline_);
       gst_pipeline_ = NULL;
@@ -172,37 +205,31 @@ bool Vision::initialize()
 
     if (!gst_element_link(launchpipe, gst_sink_))
     {
-      ROS_FATAL("[%s]: gstreamer: cannot link launchpipe -> sink", camera_name_.c_str());
+      RCLCPP_FATAL(node_->get_logger(), "[%s]: gstreamer: cannot link launchpipe -> sink", camera_name_.c_str());
       gst_object_unref(gst_pipeline_);
       gst_pipeline_ = NULL;
       return false;
     }
   }
 
-  // Calibration between ros::Time and gst timestamps
+  // Calibration between ros node time and gst timestamps
   GstClock* clock = gst_system_clock_obtain();
-  ros::Time now = ros::Time::now();
   GstClockTime ct = gst_clock_get_time(clock);
   gst_object_unref(clock);
-  time_offset_ = now.toSec() - GST_TIME_AS_USECONDS(ct) / 1e6;
+  auto now = node_->now();
+  time_offset_ = now.seconds() - static_cast<double>(GST_TIME_AS_USECONDS(ct)) / 1e6;
 
   gst_element_set_state(gst_pipeline_, GST_STATE_PAUSED);
 
   if (gst_element_get_state(gst_pipeline_, NULL, NULL, -1) == GST_STATE_CHANGE_FAILURE)
   {
-    ROS_FATAL("[%s]: Failed to PAUSE stream, check your gstreamer configuration.", camera_name_.c_str());
+    RCLCPP_FATAL(node_->get_logger(), "[%s]: Failed to PAUSE stream, check your gstreamer configuration.",
+                 camera_name_.c_str());
     return false;
   }
   else
   {
-    ROS_DEBUG("[%s]: Stream is PAUSED", camera_name_.c_str());
-  }
-
-  if (is_first_initialize_)
-  {
-    // Create ROS camera interface
-    is_first_initialize_ = false;
-    camera_publisher_ = image_transport_.advertiseCamera("image_raw", 1);
+    RCLCPP_WARN(node_->get_logger(), "[%s]: Stream is PAUSED", camera_name_.c_str());
   }
 
   return true;
@@ -216,27 +243,26 @@ bool Vision::start()
   {
     case GST_STATE_CHANGE_FAILURE:
     case GST_STATE_CHANGE_NO_PREROLL:
-      ROS_ERROR("[%s]: Failed to start stream", camera_name_.c_str());
+      RCLCPP_ERROR(node_->get_logger(), "[%s]: Failed to start stream", camera_name_.c_str());
       return false;
 
-    case GST_STATE_CHANGE_ASYNC:
-    {
+    case GST_STATE_CHANGE_ASYNC: {
       ret = gst_element_get_state(gst_pipeline_, NULL, NULL, STATE_CHANGE_ASYNC_TIMEOUT * GST_SECOND);
 
       switch (ret)
       {
         case GST_STATE_CHANGE_FAILURE:
-          ROS_ERROR("[%s]: Failed to start stream", camera_name_.c_str());
+          RCLCPP_ERROR(node_->get_logger(), "[%s]: Failed to start stream", camera_name_.c_str());
           return false;
 
         case GST_STATE_CHANGE_ASYNC:
-          ROS_ERROR("[%s]: Failed to start stream (timeout)", camera_name_.c_str());
+          RCLCPP_ERROR(node_->get_logger(), "[%s]: Failed to start stream (timeout)", camera_name_.c_str());
           return false;
       }
     }
 
     case GST_STATE_CHANGE_SUCCESS:
-      ROS_INFO("[%s]: Stream started", camera_name_.c_str());
+      RCLCPP_INFO(node_->get_logger(), "[%s]: Stream started", camera_name_.c_str());
       break;
 
     default:
@@ -266,40 +292,45 @@ bool Vision::loadCameraInfo()
    * The user can specify a custom camera information file when launching the nodelet.
    * Otherwise, a default information file is selected based on the sensor resolution.
    */
-  nh_private_.getParam("camera_info_url_user", camera_info_);
+  node_->declare_parameter<std::string>(CAMERA_INFO_URL_USER_PARAM);
+  node_->get_parameter<std::string>(CAMERA_INFO_URL_USER_PARAM, camera_info_);
   if (camera_info_.empty())
   {
-    ROS_INFO("[%s]: Custom camera information file not set, using default one based on sensor resolution",
-             camera_name_.c_str());
+    RCLCPP_INFO(node_->get_logger(),
+                "[%s]: Custom camera information file not set, using default one based on sensor resolution",
+                camera_name_.c_str());
 
-    nh_private_.getParam("camera_info_url_default", cam_info_default);
+    node_->declare_parameter<std::string>(CAMERA_INFO_URL_DEFAULT_PARAM);
+    node_->get_parameter<std::string>(CAMERA_INFO_URL_DEFAULT_PARAM, cam_info_default);
     if (!cam_info_default.empty())
     {
-      snprintf(cam_info_default_resolved, CAM_INFO_DEFAULT_URL_MAX_SIZE, cam_info_default.c_str(),
-               image_width_, image_height_);
+      snprintf(cam_info_default_resolved, CAM_INFO_DEFAULT_URL_MAX_SIZE, cam_info_default.c_str(), image_width_,
+               image_height_);
       camera_info_.assign(cam_info_default_resolved);
     }
     else
     {
-      ROS_WARN("[%s]: Parameter 'camera_info_url_default' not found or empty.", camera_name_.c_str());
+      RCLCPP_WARN(node_->get_logger(), "[%s]: Parameter '[%s]' not found or empty.", camera_name_.c_str(),
+                  CAMERA_INFO_URL_DEFAULT_PARAM.c_str());
     }
   }
 
-  if (camera_info_manager_.validateURL(camera_info_))
+  if (camera_info_manager_->validateURL(camera_info_))
   {
-    if (camera_info_manager_.loadCameraInfo(camera_info_))
+    if (camera_info_manager_->loadCameraInfo(camera_info_))
     {
-      ROS_INFO("[%s]: Loaded camera calibration from '%s'", camera_name_.c_str(), camera_info_.c_str());
+      RCLCPP_INFO(node_->get_logger(), "[%s]: Loaded camera calibration from '%s'", camera_name_.c_str(),
+                  camera_info_.c_str());
     }
     else
     {
-      ROS_WARN("[%s]: Camera info at '%s' not found. Using an uncalibrated config.", camera_name_.c_str(),
-               camera_info_.c_str());
+      RCLCPP_WARN(node_->get_logger(), "[%s]: Camera info at '%s' not found. Using an uncalibrated config.",
+                  camera_name_.c_str(), camera_info_.c_str());
     }
   }
   else
   {
-    ROS_WARN("[%s]: Camera info url syntax not supported.", camera_name_.c_str());
+    RCLCPP_WARN(node_->get_logger(), "[%s]: Camera info url syntax not supported.", camera_name_.c_str());
   }
 
   return true;
@@ -333,27 +364,25 @@ bool Vision::publish()
   GstClockTime bt = gst_element_get_base_time(gst_pipeline_);
 
   // Update header information
-  sensor_msgs::CameraInfo cur_cinfo = camera_info_manager_.getCameraInfo();
-  sensor_msgs::CameraInfoPtr cinfo;
+  auto cur_cinfo = camera_info_manager_->getCameraInfo();
 
   if (cur_cinfo.height != image_height_ || cur_cinfo.width != image_width_)
   {
-    ROS_WARN_ONCE("[%s]: Calibration file sensor resolution (%dx%d pixels) doesn't match stream resolution (%dx%d "
-                  "pixels)",
-                  camera_name_.c_str(), cur_cinfo.height, cur_cinfo.width, image_height_, image_width_);
+    RCLCPP_WARN_ONCE(node_->get_logger(),
+                     "[%s]: Calibration file sensor resolution (%dx%d pixels) doesn't match stream resolution (%dx%d "
+                     "pixels)",
+                     camera_name_.c_str(), cur_cinfo.height, cur_cinfo.width, image_height_, image_width_);
   }
 
-  cinfo.reset(new sensor_msgs::CameraInfo(cur_cinfo));
-  cinfo->height = image_height_;
-  cinfo->width = image_width_;
-
+  // Ensure camera intrinsics, etc are available in published messages
+  auto cinfo = std::make_shared<sensor_msgs::msg::CameraInfo>(cur_cinfo);
   if (use_gst_timestamps_)
   {
-    cinfo->header.stamp = ros::Time(GST_TIME_AS_USECONDS(buf->pts + bt) / 1e6 + time_offset_);
+    cinfo->header.stamp = rclcpp::Time(GST_TIME_AS_USECONDS(buf->pts + bt) / 1e6 + time_offset_);
   }
   else
   {
-    cinfo->header.stamp = ros::Time::now();
+    cinfo->header.stamp = node_->now();
   }
 
   cinfo->header.frame_id = frame_id_;
@@ -365,16 +394,18 @@ bool Vision::publish()
   // Complain if the returned buffer is smaller than we expect
   if (buf_size < expected_frame_size)
   {
-    ROS_WARN_ONCE("[%s]: Image buffer underflow: expected frame to be %u bytes but got only %lu bytes. Make sure "
-                  "frames are correctly encoded.",
-                  camera_name_.c_str(), expected_frame_size, buf_size);
+    RCLCPP_WARN_ONCE(node_->get_logger(),
+                     "[%s]: Image buffer underflow: expected frame to be %u bytes but got only %lu bytes. Make sure "
+                     "frames are correctly encoded.",
+                     camera_name_.c_str(), expected_frame_size, buf_size);
   }
 
   if (buf_size > expected_frame_size)
   {
-    ROS_WARN_ONCE("[%s]: Image buffer overflow: expected frame to be %u bytes but got %lu bytes. Make sure "
-                  "frames are correctly encoded.",
-                  camera_name_.c_str(), expected_frame_size, buf_size);
+    RCLCPP_WARN_ONCE(node_->get_logger(),
+                     "[%s]: Image buffer overflow: expected frame to be %u bytes but got %lu bytes. Make sure "
+                     "frames are correctly encoded.",
+                     camera_name_.c_str(), expected_frame_size, buf_size);
 
     gst_buffer_unmap(buf, &map);
     gst_sample_unref(sample);
@@ -383,7 +414,7 @@ bool Vision::publish()
   }
 
   // Construct Image message
-  sensor_msgs::ImagePtr img(new sensor_msgs::Image());
+  auto img = std::make_shared<sensor_msgs::msg::Image>();
   img->header = cinfo->header;
 
   // Image data and metadata
@@ -400,7 +431,7 @@ bool Vision::publish()
   std::copy(buf_data, (buf_data) + (buf_size), img->data.begin());
 
   // publish the image/info
-  camera_publisher_.publish(img, cinfo);
+  camera_publisher_->publish(img, cinfo);
 
   gst_buffer_unmap(buf, &map);
   gst_sample_unref(sample);
@@ -441,20 +472,20 @@ bool Vision::changePipelineState(GstState state)
       return true;
 
     case GST_STATE_CHANGE_FAILURE:
-      ROS_ERROR("[%s]: Failed to change pipeline state to %s",
-                camera_name_.c_str(), gst_element_state_get_name(state));
+      RCLCPP_ERROR(node_->get_logger(), "[%s]: Failed to change pipeline state to %s", camera_name_.c_str(),
+                   gst_element_state_get_name(state));
       return false;
 
-    case GST_STATE_CHANGE_ASYNC:
-    {
-      ROS_ERROR("[%s]: Failed to change pipeline state to %s (timeout)",
-                camera_name_.c_str(), gst_element_state_get_name(state));
+    case GST_STATE_CHANGE_ASYNC: {
+      RCLCPP_ERROR(node_->get_logger(), "[%s]: Failed to change pipeline state to %s (timeout)", camera_name_.c_str(),
+                   gst_element_state_get_name(state));
       return false;
     }
 
     default:
-      ROS_ERROR("[%s]: Unknown state change return value when trying to change pipeline state to %s",
-                camera_name_.c_str(), gst_element_state_get_name(state));
+      RCLCPP_ERROR(node_->get_logger(),
+                   "[%s]: Unknown state change return value when trying to change pipeline state to %s",
+                   camera_name_.c_str(), gst_element_state_get_name(state));
       return false;
   }
 }
@@ -467,7 +498,7 @@ void Vision::quit()
   {
     // In case quit was requested during a communication loss, unblock gst_app_sink_pull_sample()
     // Note that the EOS event itself doesn't cause any state transitions of the pipeline
-    GstEvent *event = NULL;
+    GstEvent* event = NULL;
     event = gst_event_new_eos();
     gst_element_send_event(gst_pipeline_, event);
   }
@@ -475,19 +506,19 @@ void Vision::quit()
 
 void Vision::run()
 {
+  // Start the node, raise exceptions if there are any errors on initialization.
   if (!configure())
   {
-    ROS_FATAL("Failed to configure kinova vision node!");
-    return;
+    throw std::runtime_error("Failed to configure kinova vision node!");
   }
 
-  while (ros::ok() && !quit_requested_)
+  while (rclcpp::ok() && !quit_requested_)
   {
     if (!is_started_)
     {
       if (!initialize())
       {
-        ROS_FATAL("[%s]: Failed to initialize stream!", camera_name_.c_str());
+        RCLCPP_FATAL(node_->get_logger(), "[%s]: Failed to initialize stream!", camera_name_.c_str());
         break;
       }
 
@@ -503,22 +534,21 @@ void Vision::run()
 
         retry_count_++;
 
-        ROS_INFO("[%s]: Trying to connect... (attempt #%d)", camera_name_.c_str(), retry_count_);
+        RCLCPP_INFO(node_->get_logger(), "[%s]: Trying to connect... (attempt #%d)", camera_name_.c_str(),
+                    retry_count_);
 
-        ros::Duration(RETRY_INTERVAL).sleep();
+        rclcpp::sleep_for(std::chrono::seconds(RETRY_INTERVAL));
       }
     }
     else
     {
       if (!publish())
       {
-        ROS_WARN("[%s]: Could not get frame", camera_name_.c_str());
+        RCLCPP_WARN(node_->get_logger(), "[%s]: Could not get frame", camera_name_.c_str());
         stop();
       }
     }
-
-    ros::spinOnce();
+    rclcpp::spin_some(node_);
   }
-
-  stop();
 }
+}  // namespace ros_kortex_vision

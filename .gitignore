@@ -1,3 +1,8 @@
 *.bin
 *.ppm
 *.bag
+
+# Ignore build artifacts
+build/*
+install/*
+log/*
