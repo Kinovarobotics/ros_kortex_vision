@@ -46,6 +46,7 @@ git clone -b ros2 https://github.com/PickNikRobotics/ros2_kortex_vision.git
 ```
 ```bash
 cd ~/colcon_ws/
+rosdep install --from-paths . --ignore-src -r -y
 colcon build
 ```
 
