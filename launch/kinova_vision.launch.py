@@ -74,6 +74,16 @@ configurable_parameters = [
         "default": "false",
         "description": "Hardware depth registration",
     },
+    {
+        "name": "max_color_pub_rate",
+        "default": "30.0",
+        "description": "Maximum image publication rate",
+    },
+    {
+        "name": "max_depth_pub_rate",
+        "default": "30.0",
+        "description": "Maximum image publication rate",
+    },
 ]
 
 
@@ -125,6 +135,7 @@ def launch_setup(context, *args, **kwargs):
                     context
                 ),
                 "frame_id": LaunchConfiguration("depth_frame_id").perform(context),
+                "max_pub_rate": LaunchConfiguration("max_depth_pub_rate"),
             }
         ],
         remappings=[
@@ -160,6 +171,7 @@ def launch_setup(context, *args, **kwargs):
                 + LaunchConfiguration("color_rtp_depay_element_config").perform(context)
                 + " ! avdec_h264 ! videoconvert",
                 "frame_id": LaunchConfiguration("color_frame_id").perform(context),
+                "max_pub_rate": LaunchConfiguration("max_color_pub_rate"),
             }
         ],
         remappings=[

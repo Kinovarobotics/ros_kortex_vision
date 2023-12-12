@@ -1,6 +1,7 @@
 #pragma once
 
 #include <atomic>
+#include <memory>
 #include <gst/gst.h>
 #include <gst/app/gstappsink.h>
 
@@ -74,5 +75,9 @@ private:
   int pixel_size_;
   bool use_gst_timestamps_;
   bool is_first_initialize_;
+
+  // Maximum publication rate variables
+  double max_pub_rate_hz_;
+  std::shared_ptr<rclcpp::Rate> max_pub_rate_;
 };
 }  // namespace ros_kortex_vision
